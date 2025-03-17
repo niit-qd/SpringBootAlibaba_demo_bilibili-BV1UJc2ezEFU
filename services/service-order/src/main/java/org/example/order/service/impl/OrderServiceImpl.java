@@ -3,6 +3,7 @@ package org.example.order.service.impl;
 import lombok.extern.slf4j.Slf4j;
 import org.example.bean.Order;
 import org.example.bean.Product;
+import org.example.order.feign.ProductFeignClient;
 import org.example.order.service.OrderService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.ServiceInstance;
@@ -23,19 +24,22 @@ public class OrderServiceImpl implements OrderService {
     private final LoadBalancerClient loadBalancerClient;
     private final RestTemplate restTemplate;
     private final RestTemplate restTemplate2;
+    private final ProductFeignClient productFeignClient;
 
-    public OrderServiceImpl(DiscoveryClient discoveryClient, LoadBalancerClient loadBalancerClient, @Qualifier("restTemplate") RestTemplate restTemplate, @Qualifier("restTemplate2") RestTemplate restTemplate2) {
+    public OrderServiceImpl(DiscoveryClient discoveryClient, LoadBalancerClient loadBalancerClient, @Qualifier("restTemplate") RestTemplate restTemplate, @Qualifier("restTemplate2") RestTemplate restTemplate2, ProductFeignClient productFeignClient) {
         this.discoveryClient = discoveryClient;
         this.loadBalancerClient = loadBalancerClient;
         this.restTemplate = restTemplate;
         this.restTemplate2 = restTemplate2;
+        this.productFeignClient = productFeignClient;
     }
 
     @Override
     public Order createOrder(Long productId, Long userId) {
 //        Product product = getProductByIdFromRemote(productId);
 //        Product product = getProductByIdFromRemoteWithLoadBalance(productId);
-        Product product = getProductByIdFromRemoteWithLoadBalanceAnnotation(productId);
+//        Product product = getProductByIdFromRemoteWithLoadBalanceAnnotation(productId);
+        Product product = getProductByIdFromRemoteWithOpenFeign(productId);
         List<Product> products = Collections.singletonList(product);
         Order order = new Order();
         order.setId((long) (Math.random() * 1000) + 100);
@@ -71,4 +75,11 @@ public class OrderServiceImpl implements OrderService {
         log.info("productId: {}, product: {}", productId, product);
         return product;
     }
+
+    private Product getProductByIdFromRemoteWithOpenFeign(Long productId) {
+        Product product = productFeignClient.getProduct(productId);
+        log.info("productId: {}, product: {}", productId, product);
+        return product;
+    }
+
 }
