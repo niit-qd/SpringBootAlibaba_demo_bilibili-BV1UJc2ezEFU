@@ -1,0 +1,48 @@
+server:
+  port: 8020
+
+spring:
+  application:
+    name: service-order
+  cloud:
+    nacos:
+      #      discovery:
+      #        service: ${spring.application.name}
+      #        server-addr: ${spring.cloud.nacos.server-addr}
+      server-addr: 127.0.0.1:8848
+      config:
+        # 命名空间：不同环境的隔离配置
+        # namespace, separation configuration of different environments.
+        # 创建namespace：命名空间 --> 新建命名空间
+        # 注意，可以有相同的命名空间名称，但是命名空间ID必须唯一。所以下面配置的是实际是命名空间的id。
+        # 建议自行设定命名空间id。如果系统生成，示例：251dba78-49af-4dc1-83c8-94b58b6a941a。
+        # 注：Nacos目前存在一个问题，即便时删除命名空间之后，尽管在console页面和API接口中不再可见/存在，与之相关的配置也不再可见，但是配置数据依然确实可以正常访问的。已经在GitHub上体检issue：#13185。
+        namespace: ns-dev-001
+  # 在nacos配置页面新建配置：配置管理-->配置列表-->创建配置
+  # 在“新建配置”页面：
+  # - 在“Data ID”中输入: service-order.yml
+  # - 在“配置内容”中输入具体配置。示例：
+  #   order:
+  #     timeout: 30min
+  #     auto-confirm: 7d
+  # 点击“发布”
+  # 可以在代码中通过“@Value(${key})”的方式取值。示例：`@Value("${order.timeout}")`、`@Value("${order.auto-confirm}")`。
+  config:
+    # 参考：[Importing Additional Data](https://docs.spring.io/spring-boot/reference/features/external-config.html#features.external-config.files.importing)
+    # 1）cong`import`导入的值将优先于触发`import`操作的文件。即，`import`的文件的值优先于当前文件配置。
+    # In both of the above examples, the values from the my.properties file will take precedence over the file that triggered its import.
+    # 2）后导入优先：
+    # Several locations can be specified under a single spring.config.import key. Locations will be processed in the order that they are defined, with later imports taking precedence.
+    # 所以，视频中所说的先导入优先是错误的。
+    # 3）如果优先文件中没有定义相关配置，则使用次优先级的配置。例如，如果nacos中没有某配置，则使用当前文件中的配置。
+    import:
+      - nacos:service-order.yml
+      # nacos，在不存在指定的配置时，也不会报错。所以`optional`可以省略
+      - optional:nacos:service-order.properties
+      # 通过group参数配置要访问的分组
+      # 指定命名空间创建配置：配置管理 --> 配置列表 --> 选择对应的命名空间，也可以从现有命名空间进行clone。
+      - nacos:service-order.yml?group=order
+order:
+  timeout: 100min
+  auto-confirm: 9d
+  desc: a good order

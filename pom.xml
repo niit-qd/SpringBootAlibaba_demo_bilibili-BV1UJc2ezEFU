@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>org.example</groupId>
+    <artifactId>cloud-demo</artifactId>
+    <version>1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <modules>
+        <module>services</module>
+        <module>module</module>
+    </modules>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencyManagement>
+        <!-- 这里选择版本，是基于`spring-cloud-alibaba-dependencies`继承的`spring-cloud-dependencies-parent`版本，确认`org.springframework.cloud`使用的版本。 -->
+        <dependencies>
+            <dependency>
+                <!-- Import dependency management from Spring Boot -->
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <!-- 注意版本问题： -->
+                <!-- [Supported Releases](https://github.com/spring-cloud/spring-cloud-release/wiki/Supported-Versions#supported-releases) -->
+                <!-- 1. 从Spring Cloud 发布版本上看，2023.0 (Leyton)同时支持3.3.x/3.2.x -->
+                <!-- [How to build](https://github.com/alibaba/spring-cloud-alibaba/blob/2023.x/README.md#how-to-build) -->
+                <!-- 2023.x branch: Corresponds to Spring Cloud 2023 & Spring Boot 3.2.x, JDK 17 or later versions are supported. -->
+                <!-- 2. SpringCloudAlibaba的2023.x branch支持Spring Cloud 2023，但是对于SpringBoot仅支持到3.2.x。所以在使用3.3.x的时候会报错： -->
+                <!-- Spring Boot [3.3.0] is not compatible with this Spring Cloud release train -->
+                <!-- 提示： -->
+                <!-- Change Spring Boot version to one of the following versions [3.2.x] -->
+                <version>3.2.6</version>
+                <!-- <version>3.3.3</version> -->
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>2023.0.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.alibaba.cloud</groupId>
+                <artifactId>spring-cloud-alibaba-dependencies</artifactId>
+                <version>2023.0.1.0</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>
