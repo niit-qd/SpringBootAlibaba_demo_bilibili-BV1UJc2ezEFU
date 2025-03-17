@@ -2,6 +2,8 @@ server:
   port: 8020
 
 spring:
+  profiles:
+    active: dev
   application:
     name: service-order
   cloud:
@@ -11,13 +13,15 @@ spring:
       #        server-addr: ${spring.cloud.nacos.server-addr}
       server-addr: 127.0.0.1:8848
       config:
-        # 命名空间：不同环境的隔离配置
+        # [命名空间](https://nacos.io/zh-cn/docs/concepts.html)
+        # 命名空间: 用于进行租户粒度的配置隔离。不同的命名空间下，可以存在相同的 Group 或 Data ID 的配置。Namespace 的常用场景之一是不同环境的配置的区分隔离，例如开发测试环境和生产环境的资源（如配置、服务）隔离等。
         # namespace, separation configuration of different environments.
         # 创建namespace：命名空间 --> 新建命名空间
         # 注意，可以有相同的命名空间名称，但是命名空间ID必须唯一。所以下面配置的是实际是命名空间的id。
         # 建议自行设定命名空间id。如果系统生成，示例：251dba78-49af-4dc1-83c8-94b58b6a941a。
         # 注：Nacos目前存在一个问题，即便时删除命名空间之后，尽管在console页面和API接口中不再可见/存在，与之相关的配置也不再可见，但是配置数据依然确实可以正常访问的。已经在GitHub上体检issue：#13185。
-        namespace: ns-dev-001
+        # 为了管理的一致性，建议将“命名空间名称”和“命名空间ID”设置为相同的。
+        namespace: public
   # 在nacos配置页面新建配置：配置管理-->配置列表-->创建配置
   # 在“新建配置”页面：
   # - 在“Data ID”中输入: service-order.yml
@@ -41,8 +45,28 @@ spring:
       - optional:nacos:service-order.properties
       # 通过group参数配置要访问的分组
       # 指定命名空间创建配置：配置管理 --> 配置列表 --> 选择对应的命名空间，也可以从现有命名空间进行clone。
+      # [配置分组](https://nacos.io/zh-cn/docs/concepts.html)
+      # 配置分组的常见场景：不同的应用或组件使用了相同的配置类型，如 database_url 配置和 MQ_topic 配置。
       - nacos:service-order.yml?group=order
 order:
   timeout: 100min
   auto-confirm: 9d
   desc: a good order
+
+
+---
+
+spring:
+  config:
+    activate:
+      on-profile: dev
+    import:
+      - nacos:service-order.yml?group=order
+      - nacos:service-order.properties?group=order
+  cloud:
+    nacos:
+      config:
+        namespace: ns-dev-001
+
+# 示例中的那种将`spring.cloud.nacos.config.namespace`配置为${spring.profile.active}`的写法是不合理的。
+# 这种写法实际上是某种配置习惯的强绑定，在实际操作中，无法确保当前springboot的active值和nacos的namespace恰好一致，例如实际操作中有可能需要切换到另一个命名空间。
