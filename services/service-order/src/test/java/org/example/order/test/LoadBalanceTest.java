@@ -21,4 +21,13 @@ public class LoadBalanceTest {
             log.info("service-product:{}:{}", serviceInstance.getHost(), serviceInstance.getPort());
         }
     }
+
+    @Test
+    public void testInstance2() {
+        for (int i = 0; i < 10; i++) {
+            ServiceInstance serviceInstance = loadBalancerClient.choose("service-product-https");
+            log.info("service-product. serviceInstance = {}, {}", serviceInstance.getClass(), serviceInstance);
+            log.info("service-product:{}://{}:{}", serviceInstance.getScheme(), serviceInstance.getHost(), serviceInstance.getPort());
+        }
+    }
 }

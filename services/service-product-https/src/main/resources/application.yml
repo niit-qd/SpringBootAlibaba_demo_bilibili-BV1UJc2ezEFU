@@ -1,0 +1,29 @@
+server:
+  port: 8015
+  ssl:
+    enabled: true
+    key-store: classpath:keystore.p12
+    key-store-type: PKCS12
+    key-store-password: 123456
+    key-alias: tomcat
+    protocol: TLS
+    # 默认支持所有，相当于`all`
+    # enabled-protocols: TLSv1.2
+
+# 注：本目录下的"certfile.cert"文件需要在客户端导入到JRE环境。非本模块所需要的文档。留在此处，只是为了方便快速实验本模块而已。
+# 对于客户端，需要import证书文件到JRE环境。。具体方法参考本模块相关的说明文档。
+
+spring:
+  application:
+    name: service-product-https
+  cloud:
+    nacos:
+      #      discovery:
+      #        service: ${spring.application.name}
+      #        server-addr: ${spring.cloud.nacos.server-addr}
+      config:
+        import-check:
+          enabled: false
+      discovery:
+        secure: true
+      server-addr: 127.0.0.1:8848
