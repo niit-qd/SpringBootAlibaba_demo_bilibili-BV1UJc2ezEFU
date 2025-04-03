@@ -107,6 +107,7 @@
         ``` Java
         @Configuration(proxyBeanMethods = false)
         public class MyFeignClientsConfiguration {
+            // 这里只是示例，仅供学习用。现在基本都是使用SLF4J来作为log工具，所以在实际应用时，不建议使用。
             @Bean
             Logger feignLogger() {
                 Logger.JavaLogger logger = new Logger.JavaLogger();

@@ -10,6 +10,7 @@ import java.io.File;
 public class MyFeignClientsConfiguration {
     @Bean
     Logger feignLogger() {
+        // 这里只是示例，仅供学习用。现在基本都是使用SLF4J来作为log工具，所以在实际应用时，不建议使用。
         // 下面的步骤会设置logger的level为FINE，并将logger内容写入到指定的文件
         File dir = new File("target");
         if (dir.exists() && !dir.isDirectory()) {
