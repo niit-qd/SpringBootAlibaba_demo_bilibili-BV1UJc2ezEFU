@@ -1,6 +1,6 @@
 package org.example.order.controller;
 
-import org.example.order.feign.DirectFeignClient;
+import org.example.order.feign.client.DirectFeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;

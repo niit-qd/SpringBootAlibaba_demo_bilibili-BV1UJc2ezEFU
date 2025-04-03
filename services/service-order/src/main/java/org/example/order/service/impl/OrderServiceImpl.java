@@ -3,7 +3,7 @@ package org.example.order.service.impl;
 import lombok.extern.slf4j.Slf4j;
 import org.example.bean.Order;
 import org.example.bean.Product;
-import org.example.order.feign.ProductFeignClient;
+import org.example.order.feign.client.ProductFeignClient;
 import org.example.order.service.OrderService;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.cloud.client.ServiceInstance;

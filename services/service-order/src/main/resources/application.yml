@@ -52,7 +52,10 @@ order:
   timeout: 100min
   auto-confirm: 9d
   desc: a good order
-
+# 为OpenFeign设置slf4j的logger-name和level
+logging:
+  level:
+    org.example.order.feign.client: DEBUG
 
 ---
 

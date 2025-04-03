@@ -1,7 +1,10 @@
-package org.example.order.feign;
+package org.example.order.feign.client;
 
+import feign.Logger;
+import feign.slf4j.Slf4jLogger;
 import org.example.bean.Product;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 
@@ -33,10 +36,22 @@ import org.springframework.web.bind.annotation.PathVariable;
 // v4.3.0-M2 ··· v2.0.0.M1
 // https://github.com/spring-cloud/spring-cloud-openfeign/commit/d3cba4d80ecfde246465b414c4618e452468f0c3
 
-@FeignClient(name = "service-product", path = "/product")
+// @FeignClient(name = "service-product", path = "/product")
+@FeignClient(name = "service-product", path = "/product", configuration = ProductFeignClient.ProductFeignClientConfiguration.class)
 // @RequestMapping("/product")
 public interface ProductFeignClient {
 
+    static final class ProductFeignClientConfiguration<T> {
+        @Bean(name = "feignLogger")
+        Logger feignLogger() {
+            return new Slf4jLogger(ProductFeignClient.class);
+        }
+
+        @Bean
+        public Logger.Level feignLoggerLevel() {
+            return Logger.Level.FULL;
+        }
+    }
 
     @GetMapping("/get/{id}")
     Product getProduct(@PathVariable("id") Long productId);

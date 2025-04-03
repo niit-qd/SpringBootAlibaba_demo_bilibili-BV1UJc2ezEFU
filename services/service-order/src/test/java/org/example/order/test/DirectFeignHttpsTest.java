@@ -2,8 +2,8 @@ package org.example.order.test;
 
 import lombok.extern.slf4j.Slf4j;
 import org.example.bean.Product;
-import org.example.order.feign.ProductHttpsFeignClient1;
-import org.example.order.feign.ProductHttpsFeignClient2;
+import org.example.order.feign.client.ProductHttpsFeignClient1;
+import org.example.order.feign.client.ProductHttpsFeignClient2;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

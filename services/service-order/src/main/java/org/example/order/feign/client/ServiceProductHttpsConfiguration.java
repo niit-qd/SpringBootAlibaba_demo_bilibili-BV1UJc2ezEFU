@@ -1,4 +1,4 @@
-package org.example.order.feign;
+package org.example.order.feign.client;
 
 public class ServiceProductHttpsConfiguration {
 }
