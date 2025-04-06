@@ -10,7 +10,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
 @Slf4j
-public class DirectFeignHttpsTest {
+public class FeignHttpsTest {
 
     @Autowired
     private ProductHttpsFeignClient1 productHttpsFeignClient1;

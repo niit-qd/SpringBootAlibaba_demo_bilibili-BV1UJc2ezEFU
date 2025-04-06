@@ -22,6 +22,34 @@ spring:
         # 注：Nacos目前存在一个问题，即便时删除命名空间之后，尽管在console页面和API接口中不再可见/存在，与之相关的配置也不再可见，但是配置数据依然确实可以正常访问的。已经在GitHub上体检issue：#13185。
         # 为了管理的一致性，建议将“命名空间名称”和“命名空间ID”设置为相同的。
         namespace: public
+    openfeign:
+      client:
+        config:
+          default:
+            logger-level: full
+            # connectTimeout: 5000
+            # readTimeout: 2000
+          52vmy-api:
+            url: https://api.52vmy.cn
+            default-query-parameters:
+              type: text # 该公共接口的返回格式默认JSON可选text
+          # 验证 readTimeout
+          service-product-product3:
+            logger-level: full
+            # read-timeout: 2000
+            # retryer: feign.Retryer.Default # 会被configuration属性所覆盖
+          # 验证 connectTimeout
+          service-product-product4:
+            logger-level: full
+            connect-timeout: 5000
+            # retryer: 使用configuration属性
+          # service-product-product5:
+          # # 注册自定义拦截器
+          #   request-interceptors:
+          #     - org.example.order.feign.client.ProductFeignClient5$MyRequestInterceptor
+          #     - org.example.order.feign.client.ProductFeignClient5$MyRequestInterceptor
+          #   response-interceptor: org.example.order.feign.client.ProductFeignClient5$MyResponseInterceptor
+
   # 在nacos配置页面新建配置：配置管理-->配置列表-->创建配置
   # 在“新建配置”页面：
   # - 在“Data ID”中输入: service-order.yml
@@ -56,6 +84,9 @@ order:
 logging:
   level:
     org.example.order.feign.client: DEBUG
+    org.example.order.feign.client.DirectFeignClient2: DEBUG
+
+
 
 ---
 
