@@ -1,5 +1,6 @@
 package org.example.order.feign.client;
 
+import feign.Request;
 import feign.RetryableException;
 import feign.Retryer;
 import lombok.extern.slf4j.Slf4j;
@@ -8,12 +9,20 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 
+import java.util.concurrent.TimeUnit;
+
 import static java.util.concurrent.TimeUnit.SECONDS;
 
 @FeignClient(name = "service-product", contextId = "service-product-product3", path = "/product3", configuration = ProductFeignClient3.FeignClientConfiguration.class)
 public interface ProductFeignClient3 {
 
     class FeignClientConfiguration {
+
+        @Bean
+        public Request.Options options() {
+            return new Request.Options(4, TimeUnit.SECONDS, 10, TimeUnit.SECONDS, true);
+        }
+
         // @Bean
         // public Retryer retryer() {
         //     return new Retryer.Default(3000, 10, 4);
@@ -95,7 +104,6 @@ public interface ProductFeignClient3 {
 
             @Override
             public Retryer clone() {
-                log.warn("trace clone ...", new Exception("00000000000000000000000000"));
                 return new MyRetryer(period, maxPeriod, maxAttempts);
             }
         }

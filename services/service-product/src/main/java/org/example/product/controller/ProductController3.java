@@ -16,7 +16,7 @@ public class ProductController3 {
     @GetMapping("/sayHello")
     public String sayHello(@RequestParam("name") String name) {
         Date before = new Date();
-        long duration = 1000 * 4;
+        long duration = 1000 * 24;
         try {
             Thread.sleep(duration);
         } catch (InterruptedException e) {
