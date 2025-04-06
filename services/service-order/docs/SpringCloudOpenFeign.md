@@ -945,7 +945,46 @@
    A bean of `Retryer.NEVER_RETRY` with the type `Retryer` is created by default, which will disable retrying. Notice this retrying behavior is different from the Feign default one, where it will automatically retry IOExceptions, treating them as transient network related exceptions, and any RetryableException thrown from an ErrorDecoder.
    默认情况下会创建一个类型为 `Retryer` 的 `Retryer.NEVER_RETRY` bean，这将禁用重试。请注意，此重试行为与 Feign 默认行为不同，在 Feign 默认行为中，它会自动重试 IOException，将其视为瞬时网络相关异常，以及从 ErrorDecoder 抛出的任何 RetryableException。
 
-2. 使用默认构造方法进行属性文件配置
+2. 重试原理
+    `feign.SynchronousMethodHandler#invoke`
+    执行步骤：
+    - 如果当前请求失败，即，报异常，则使用`Retryer`进行重试判断和延时操作
+    - `Retryer`延时后，继续执行上一步；如此循环
+
+    ``` Java
+    final class SynchronousMethodHandler implements MethodHandler {
+        ...
+      @Override
+      public Object invoke(Object[] argv) throws Throwable {
+        RequestTemplate template = buildTemplateFromArgs.create(argv);
+        Options options = findOptions(argv);
+        Retryer retryer = this.retryer.clone();
+        while (true) {
+          try {
+            return executeAndDecode(template, options);
+          } catch (RetryableException e) {
+            try {
+              retryer.continueOrPropagate(e);
+            } catch (RetryableException th) {
+              Throwable cause = th.getCause();
+              if (propagationPolicy == UNWRAP && cause != null) {
+                throw cause;
+              } else {
+                throw th;
+              }
+            }
+            if (logLevel != Logger.Level.NONE) {
+              logger.logRetry(metadata.configKey(), logLevel);
+            }
+            continue;
+          }
+        }
+      }
+        ...
+    }
+    ```
+
+3. 使用默认构造方法进行属性文件配置
     ``` Java
     spring:
         cloud:
@@ -956,7 +995,7 @@
                             # retryer: feign.Retryer.Default
                             retryer: com.example.SimpleRetryer
     ```
-3. 自定义构造方法
+4. 自定义构造方法
     示例：
     ``` Java
     @FeignClient(name = "foo-product", contextId = "foo-product-api", path="/api", configuration = FooFeignClient4.Configuration.class)
