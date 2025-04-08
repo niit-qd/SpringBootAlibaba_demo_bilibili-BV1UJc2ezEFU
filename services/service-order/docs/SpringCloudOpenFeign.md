@@ -1229,13 +1229,41 @@
 4. 
 
 
+---
+
+### 其它
 
 ---
 
-#### 请求拦截器 `Collection<RequestInterceptor>`
+#### 在rest请求中显示OpenFeign的错误信息。
 
-1. 
-
----
-
-#### 响应拦截器
+1. `ErrorDecoder`
+    看了一下`feign.FeignException.FeignExceptionMessageBuilder`的处理流程，发现重写`feign.codec.ErrorDecoder`的意义不大。所以，本文档忽略此部分的描述。
+2. 在SpringBoot中的rest请求错误异常返回中添加`OpenFeign`的错误信息
+    这里不写逻辑了，只写结果。
+    SpringBoot中处理请求异常使用的配置类是`org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration`。业务链中，用于处理rest请求异常的关键Bean是`org.springframework.boot.web.servlet.error.DefaultErrorAttributes`
+    [重学SpringBoot3-ErrorMvcAutoConfiguration类](https://blog.csdn.net/u014390502/article/details/136644687)
+    ``` Java
+    @Configuration
+    public class DefaultErrorConfiguration {
+    
+        @Bean
+        @Profile(value = "dev")
+        public DefaultErrorAttributes defaultErrorAttributes() {
+            return new MyDefaultErrorAttributes();
+        }
+    
+        static class MyDefaultErrorAttributes extends DefaultErrorAttributes {
+            @Override
+            public Map<String, Object> getErrorAttributes(WebRequest request, ErrorAttributeOptions options) {
+                Map<String, Object> errorAttributes = super.getErrorAttributes(request, options);
+                Throwable throwable = getError(request);
+                if (null != throwable) {
+                    errorAttributes.put("detail", throwable.getMessage());
+                }
+                return errorAttributes;
+            }
+        }
+    }
+    ```
+    注：这里只是为了开发阶段，在实际生产环境中不推荐使用。
