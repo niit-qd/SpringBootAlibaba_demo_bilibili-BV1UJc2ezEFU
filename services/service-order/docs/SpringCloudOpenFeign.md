@@ -412,6 +412,7 @@
         <br/>
         可配置的项参考：`org.springframework.cloud.openfeign.FeignClientProperties.FeignClientConfiguration`。
         注意：`url`，只有在注解`@FeignClient`中未配置的时候才会被采用。
+
         ``` Java
         @ConfigurationProperties("spring.cloud.openfeign.client")
         public class FeignClientProperties {
@@ -591,7 +592,6 @@
         }
     }
     ```
-6. 
 
 ---
 
@@ -1226,9 +1226,398 @@
 
         总结来说，X-Token是一种自定义的身份验证方式，而Authorization是一种标准的身份验证方式。
         ```
-4. 
 
+---
 
+### 熔断回退 `CircuitBreaker Fallbacks`
+
+#### 原理
+
+1. 概述：`spring.cloud.openfeign.circuitbreaker.enabled`
+    [Feign Spring Cloud CircuitBreaker Support](https://docs.spring.io/spring-cloud-openfeign/reference/spring-cloud-openfeign.html#spring-cloud-feign-circuitbreaker)
+    If Spring Cloud CircuitBreaker is on the classpath and `spring.cloud.openfeign.circuitbreaker.enabled=true`, Feign will wrap all methods with a circuit breaker.
+    如果 Spring Cloud CircuitBreaker 在类路径上并且 `spring.cloud.openfeign.circuitbreaker.enabled=true`，则 Feign 将使用断路器包装所有方法。
+
+    上面是SpringCloud官方给出的一个大概用法，意思是说，如果要openfeign支持熔断，必须设置`spring.cloud.openfeign.circuitbreaker.enabled=true`。
+    但是，不是说将此属性值设置为`true`，熔断就可以用了。
+    下面排查一下该属性在`spring-cloud-openfeign`中的使用：
+    - `org.springframework.cloud.openfeign.FeignClientsConfiguration.DefaultFeignBuilderConfiguration`、`org.springframework.cloud.openfeign.FeignClientsConfiguration.CircuitBreakerPresentFeignBuilderConfiguration`
+        用于创建`Feign.Builder`。
+        ``` Java
+            @Configuration(proxyBeanMethods = false)
+            @Conditional(FeignCircuitBreakerDisabledConditions.class)
+            protected static class DefaultFeignBuilderConfiguration {
+
+                @Bean
+                @Scope("prototype")
+                @ConditionalOnMissingBean
+                public Feign.Builder feignBuilder(Retryer retryer) {
+                    return Feign.builder().retryer(retryer);
+                }
+
+            }
+
+            @Configuration(proxyBeanMethods = false)
+            @ConditionalOnClass(CircuitBreaker.class)
+            @ConditionalOnProperty("spring.cloud.openfeign.circuitbreaker.enabled")
+            protected static class CircuitBreakerPresentFeignBuilderConfiguration {
+
+                @Bean
+                @Scope("prototype")
+                @ConditionalOnMissingBean({ Feign.Builder.class, CircuitBreakerFactory.class })
+                public Feign.Builder defaultFeignBuilder(Retryer retryer) {
+                    return Feign.builder().retryer(retryer);
+                }
+
+                @Bean
+                @Scope("prototype")
+                @ConditionalOnMissingBean
+                @ConditionalOnBean(CircuitBreakerFactory.class)
+                public Feign.Builder circuitBreakerFeignBuilder() {
+                    return FeignCircuitBreaker.builder();
+                }
+
+            }
+        ```
+    - `org.springframework.cloud.openfeign.FeignAutoConfiguration.CircuitBreakerPresentFeignTargeterConfiguration`
+        在缺失或者存在`CircuitBreakerFactory`的时候，提供不同的`Targeter`。
+        ``` Java
+            @Configuration(proxyBeanMethods = false)
+            @ConditionalOnClass(CircuitBreaker.class)
+            @ConditionalOnProperty(value = "spring.cloud.openfeign.circuitbreaker.enabled", havingValue = "true")
+            protected static class CircuitBreakerPresentFeignTargeterConfiguration {
+
+                @Bean
+                @ConditionalOnMissingBean(CircuitBreakerFactory.class)
+                public Targeter defaultFeignTargeter() {
+                    return new DefaultTargeter();
+                }
+
+                @Bean
+                @ConditionalOnMissingBean(CircuitBreakerNameResolver.class)
+                @ConditionalOnProperty(value = "spring.cloud.openfeign.circuitbreaker.alphanumeric-ids.enabled",
+                        havingValue = "false")
+                public CircuitBreakerNameResolver circuitBreakerNameResolver() {
+                    return new DefaultCircuitBreakerNameResolver();
+                }
+
+                @Bean
+                @ConditionalOnMissingBean(CircuitBreakerNameResolver.class)
+                @ConditionalOnProperty(value = "spring.cloud.openfeign.circuitbreaker.alphanumeric-ids.enabled",
+                        havingValue = "true", matchIfMissing = true)
+                public CircuitBreakerNameResolver alphanumericCircuitBreakerNameResolver() {
+                    return new AlphanumericCircuitBreakerNameResolver();
+                }
+
+                @SuppressWarnings("rawtypes")
+                @Bean
+                @ConditionalOnMissingBean
+                @ConditionalOnBean(CircuitBreakerFactory.class)
+                public Targeter circuitBreakerFeignTargeter(CircuitBreakerFactory circuitBreakerFactory,
+                        @Value("${spring.cloud.openfeign.circuitbreaker.group.enabled:false}") boolean circuitBreakerGroupEnabled,
+                        CircuitBreakerNameResolver circuitBreakerNameResolver) {
+                    return new FeignCircuitBreakerTargeter(circuitBreakerFactory, circuitBreakerGroupEnabled,
+                            circuitBreakerNameResolver);
+                }
+
+                static class DefaultCircuitBreakerNameResolver implements CircuitBreakerNameResolver {
+
+                    @Override
+                    public String resolveCircuitBreakerName(String feignClientName, Target<?> target, Method method) {
+                        return Feign.configKey(target.type(), method);
+                    }
+
+                }
+
+                static class AlphanumericCircuitBreakerNameResolver extends DefaultCircuitBreakerNameResolver {
+
+                    @Override
+                    public String resolveCircuitBreakerName(String feignClientName, Target<?> target, Method method) {
+                        return super.resolveCircuitBreakerName(feignClientName, target, method).replaceAll("[^a-zA-Z0-9]", "");
+                    }
+
+                }
+
+            }
+        ```
+    - `org.springframework.cloud.openfeign.FeignCircuitBreakerDisabledConditions`
+        
+        这是一个条件类。
+        在这里，用于确定一个熔断禁用的条件。
+        该类的bean被用在`DefaultFeignBuilderConfiguration`中，用于在熔断被禁用时提供一个默认的`Feign.Builder`。
+        ``` Java
+            @ConditionalOnProperty(value = "spring.cloud.openfeign.circuitbreaker.enabled", havingValue = "false",
+                    matchIfMissing = true)
+                    static class CircuitBreakerDisabled {
+
+            }
+        ```
+2. starter
+    ``` xml
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-starter-openfeign</artifactId>
+            </dependency>
+    ```
+3. 自动配置
+    `\META-INF\spring\org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+    ``` imports
+    org.springframework.cloud.openfeign.hateoas.FeignHalAutoConfiguration
+    org.springframework.cloud.openfeign.FeignAutoConfiguration
+    org.springframework.cloud.openfeign.encoding.FeignAcceptGzipEncodingAutoConfiguration
+    org.springframework.cloud.openfeign.encoding.FeignContentGzipEncodingAutoConfiguration
+    org.springframework.cloud.openfeign.loadbalancer.FeignLoadBalancerAutoConfiguration
+    ```
+    注：这里并没有包含核心配置类：`org.springframework.cloud.openfeign.FeignClientsConfiguration`和`org.springframework.cloud.openfeign.FeignClientsConfiguration.CircuitBreakerPresentFeignBuilderConfiguration`。
+4. `Feign.Builder`
+    如上，负责此类相关bean生产任务的配置类是：`org.springframework.cloud.openfeign.FeignClientsConfiguration.CircuitBreakerPresentFeignBuilderConfiguration`。
+    从处理方式，大致可以分为如下几类：
+    1. `spring.cloud.openfeign.circuitbreaker.enabled`存在，且为`false`
+        如上代码可知，此时满足默认配置类`DefaultFeignBuilderConfiguration`的条件。
+        创建的`Feign.Builder`bean实例是:
+        ``` Java
+        	return Feign.builder().retryer(retryer);
+        ```
+    2. `spring.cloud.openfeign.circuitbreaker.enabled`存在，且为`true`
+        尽管配置类`CircuitBreakerPresentFeignBuilderConfiguration`的条件是只要存在属性`spring.cloud.openfeign.circuitbreaker.enabled`即可，但是其2个注入bean的条件之一是必须缺少`Feign.Builder`。
+        由于，当`spring.cloud.openfeign.circuitbreaker.enabled`的值为存在，且为`false`时就会创建一个`Feign.Builder`。
+        所以，`CircuitBreakerPresentFeignBuilderConfiguration`的主要应用场景是在`spring.cloud.openfeign.circuitbreaker.enabled`为`true`的时候。
+        注：查看`additional-spring-configuration-metadata.json`可知，该属性只能是一个Boolean值，默认值是`false`。
+        ``` json
+                {
+                    "name": "spring.cloud.openfeign.circuitbreaker.enabled",
+                    "type": "java.lang.Boolean",
+                    "description": "If true, an OpenFeign client will be wrapped with a Spring Cloud CircuitBreaker circuit breaker.",
+                    "defaultValue": "false"
+                },
+        ```
+        1. 不存在`CircuitBreakerFactory`bean
+            和`spring.cloud.openfeign.circuitbreaker.enabled`为`false`一样：
+            ``` Java
+                return Feign.builder().retryer(retryer);
+            ```
+        2. 存在`CircuitBreakerFactory`bean
+            会返回一个配置了`CircuitBreakerFactory`bean的`Feign.Builder`bean：
+            ``` Java
+            			return FeignCircuitBreaker.builder();
+            ```
+            具体过程参考：`org.springframework.cloud.openfeign.CircuitBreakerPresentFeignTargeterConfiguration`的实现。
+        
+        是否注入`CircuitBreakerFactory`bean的区别？
+        从目前看到的现象是，如果没有配置`CircuitBreakerFactory`bean，即便设置`spring.cloud.openfeign.circuitbreaker.enabled`为`true`，也不会调用callback。
+        // TDOD: 具体逻辑，暂时为搞清楚。只能通过一个实例来确认这个结论。
+
+        实例：创建一个demo程序来验证`CircuitBreakerFactory`的作用。
+        实验证明，如果注入`CircuitBreakerFactory`的bean，则可以成功调用Callback；否侧，不会。
+        // TODO: 目前不太清楚`CircuitBreakerFactory`在`spring-cloud-openfeign-core`的作用逻辑，所以下面的示例可能存在错误。但至少证明了注入`CircuitBreakerFactory`bean的必要性。
+        **注：**`CircuitBreakerFactory`的bean只能通过根容器的方式注入，而通过`@FeignClient`注解的配置属性`configuration`注入无效。
+        // TODO: 在`CircuitBreakerPresentFeignBuilderConfiguration`中，是通过条件方式进行判断的，而不是通过代码方式进行判断，大概和所属bean容器有关。
+        ``` Java
+        @Configuration
+        public class MyOpenFeignConfiguration {
+
+            @Bean
+            public <CONF, CONFB extends ConfigBuilder<CONF>> CircuitBreakerFactory<CONF, CONFB> circuitBreakerFactory() {
+                return new MyCircuitBreakerFactory<CONF, CONFB>();
+            }
+
+            @Slf4j
+            static class MyCircuitBreakerFactory<CONF, CONFB extends ConfigBuilder<CONF>> extends CircuitBreakerFactory<CONF, CONFB> {
+                @Override
+                public CircuitBreaker create(String id) {
+                    return new CircuitBreaker() {
+                        @Override
+                        public <T> T run(Supplier<T> toRun, Function<Throwable, T> fallback) {
+                            log.info("CircuitBreakerFactory create");
+                            return null;
+                        }
+                    };
+                }
+
+                @Override
+                protected CONFB configBuilder(String id) {
+                    log.info("ConfigBuilder create");
+                    return null;
+                }
+
+                @Override
+                public void configureDefault(Function defaultConfiguration) {
+                    log.info("configureDefault");
+                }
+            }
+        }
+        ```
+
+5. 禁用熔断
+    [Feign Spring Cloud CircuitBreaker Support](https://docs.spring.io/spring-cloud-openfeign/reference/spring-cloud-openfeign.html#spring-cloud-feign-circuitbreaker)
+    To disable Spring Cloud CircuitBreaker support on a per-client basis create a vanilla `Feign.Builder` with the "prototype" scope, e.g.:
+    要在每个客户端上禁用 Spring Cloud CircuitBreaker 支持，请创建一个具有“原型”范围的 vanilla `Feign.Builder`，例如：
+    ``` Java
+    @Configuration
+    public class FooConfiguration {
+        @Bean
+        @Scope("prototype")
+        public Feign.Builder feignBuilder() {
+            return Feign.builder();
+        }
+    }
+    ```
+    Spring Cloud官方给了一个方法，通过注入一个默认的`Feign.Builder`bean来实现禁用熔断的目的。
+    从代码中可以看到，实际上，该方法是创建的`Feign.Builder`bean，是一个没有配置`CircuitBreakerFactory`的bean。
+    通过验证可知，即便是当前容器中已经注入了`CircuitBreakerFactory`bean，但是由于没有配置到`Feign.Builder`的bean中，所以熔断也不生效。原因，可以对比`org.springframework.cloud.openfeign.CircuitBreakerPresentFeignTargeterConfiguration`的实现。
+
+6. 相关的实现框架
+    1. `spring-cloud-starter-alibaba-sentinel`
+        1. starters
+            [OpenFeign Support](https://spring-cloud-alibaba-group.github.io/github-pages/2021/en-us/index.html#_openfeign_support)
+            Sentinel is compatible with the [OpenFeign](https://github.com/OpenFeign/feign) component. To use it, in addition to introducing the `sentinel-starter` dependency, complete the following 2 steps:
+            - Enable the Sentinel support for feign in the properties file. `feign.sentinel.enabled=true`
+            - Add the `openfeign starter` dependency to trigger and enable `sentinel starter`:
+                ``` xml
+                        <dependency>
+                            <groupId>com.alibaba.cloud</groupId>
+                            <artifactId>spring-cloud-starter-alibaba-sentinel</artifactId>
+                        </dependency>
+                ```
+        2. 自动配置
+            `\META-INF\spring\org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+            ``` imports
+            com.alibaba.cloud.circuitbreaker.sentinel.SentinelCircuitBreakerAutoConfiguration
+            com.alibaba.cloud.circuitbreaker.sentinel.ReactiveSentinelCircuitBreakerAutoConfiguration
+            com.alibaba.cloud.circuitbreaker.sentinel.feign.SentinelFeignClientAutoConfiguration
+            ```
+            关键配置类：`com.alibaba.cloud.circuitbreaker.sentinel.feign.SentinelFeignClientAutoConfiguration`
+        
+        3. `CircuitBreakerFactory`
+            只要引入`spring-cloud-starter-alibaba-sentinel`，默认就会支持。
+            原因是，默认情况下，sentinel会注入`CircuitBreakerFactory`的bean，从而执行`CircuitBreakerPresentFeignBuilderConfiguration#circuitBreakerFeignBuilder()`，注入一个配置了`CircuitBreakerFactory`bean的`Feign.Builder`bean。
+            查看`spring-configuration-metadata.json`：该属性用于是否启用`sentinel circuitbreaker`
+            ``` json
+                {
+                "name": "spring.cloud.circuitbreaker.sentinel.enabled",
+                "type": "java.lang.Boolean",
+                "description": "enable sentinel circuitbreaker or not."
+                }
+            ```
+            `com.alibaba.cloud.circuitbreaker.sentinel.SentinelCircuitBreakerAutoConfiguration`：
+            `spring.cloud.circuitbreaker.sentinel.enabled`默认值是`true`。当该属性值设置为`true`的时候，就会注入`CircuitBreakerFactory`bean。
+            ``` Java
+            @Configuration(proxyBeanMethods = false)
+            @ConditionalOnClass({ SphU.class })
+            @ConditionalOnProperty(name = "spring.cloud.circuitbreaker.sentinel.enabled",
+                    havingValue = "true", matchIfMissing = true)
+            public class SentinelCircuitBreakerAutoConfiguration {
+
+                @Autowired(required = false)
+                private List<Customizer<SentinelCircuitBreakerFactory>> customizers = new ArrayList<>();
+
+                @Bean
+                @ConditionalOnMissingBean(CircuitBreakerFactory.class)
+                public CircuitBreakerFactory sentinelCircuitBreakerFactory() {
+                    SentinelCircuitBreakerFactory factory = new SentinelCircuitBreakerFactory();
+                    customizers.forEach(customizer -> customizer.customize(factory));
+                    return factory;
+                }
+
+            }
+            ```
+            验证方法：将`spring.cloud.circuitbreaker.sentinel.enabled`设置为`false`，由于不在创建默认的`CircuitBreakerFactory`，导致无法调用Callback。
+            **注：**此时注入的`Feign.Builder`bean是：`spring-cloud-openfeign`中的`org.springframework.cloud.openfeign.FeignClientsConfiguration.CircuitBreakerPresentFeignBuilderConfiguration#circuitBreakerFeignBuilder()`。
+        4. `SentinelFeign.Builder`
+            启用：`feign.sentinel.enabled`
+            `additional-spring-configuration-metadata.json`：
+            ``` Java
+                {
+                "defaultValue": "false",
+                "name": "feign.sentinel.enabled",
+                "description": "If true, an OpenFeign client will be wrapped with a Sentinel circuit breaker.",
+                "type": "java.lang.Boolean"
+                }
+            ```
+            `com.alibaba.cloud.sentinel.feign.SentinelFeignAutoConfiguration`：
+            ``` Java
+            @Configuration(proxyBeanMethods = false)
+            @ConditionalOnClass({ SphU.class, Feign.class })
+            public class SentinelFeignAutoConfiguration {
+
+                @Bean
+                @Scope("prototype")
+                @ConditionalOnMissingBean
+                @ConditionalOnProperty(name = "feign.sentinel.enabled")
+                public Feign.Builder feignSentinelBuilder() {
+                    return SentinelFeign.builder();
+                }
+
+            }
+            ```
+    2. `spring-cloud-circuitbreaker-resilience4j`
+        1. starters
+            [Starters](https://docs.spring.io/spring-cloud-circuitbreaker/reference/spring-cloud-circuitbreaker-resilience4j/starters.html)
+            There are two starters for the Resilience4J implementations, one for reactive applications and one for non-reactive applications.
+            - `org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j` - non-reactive applications
+            - `org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j` - reactive applications
+
+            这里以非响应式为例。
+            ``` xml
+                    <dependency>
+                        <groupId>org.springframework.cloud</groupId>
+                        <artifactId>spring-cloud-starter-circuitbreaker-resilience4j</artifactId>
+                    </dependency>
+            ```
+        2. 启用和禁用
+            [Auto-Configuration](https://docs.spring.io/spring-cloud-circuitbreaker/reference/spring-cloud-circuitbreaker-resilience4j/starters.html#auto-configuration)
+            You can disable the Resilience4J auto-configuration by setting `spring.cloud.circuitbreaker.resilience4j.enabled` to `false`.
+            您可以通过将`spring.cloud.circuitbreaker.resilience4j.enabled`设置为`false`来禁用 Resilience4J 自动配置。
+        3. 自动配置
+            `\META-INF\spring\org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+            ``` imports
+            org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JAutoConfiguration
+            org.springframework.cloud.circuitbreaker.resilience4j.ReactiveResilience4JAutoConfiguration
+            ```
+        4. `CircuitBreakerFactory`
+            `org.springframework.cloud.client.circuitbreaker.bstractCircuitBreakerFactory <CONF,CONFB>org.springframework.cloud.client.circuitbreaker.CircuitBreakerFactory<Resilience4JConfigBuilder.Resilience4JCircuitBreakerConfiguration,Resilience4JConfigBuilder> org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JCircuitBreakerFactory`
+            实际上，如果需要启用熔断，一共需要2个属性配置为false。缺失时，默认可匹配。
+            - `spring.cloud.circuitbreaker.resilience4j.enabled`
+            - `spring.cloud.circuitbreaker.resilience4j.blocking.enabled`
+            
+            ``` Java
+            @Configuration(proxyBeanMethods = false)
+            @EnableConfigurationProperties(Resilience4JConfigurationProperties.class)
+            @ConditionalOnProperty(name = { "spring.cloud.circuitbreaker.resilience4j.enabled",
+                    "spring.cloud.circuitbreaker.resilience4j.blocking.enabled" }, matchIfMissing = true)
+            public class Resilience4JAutoConfiguration {
+
+                @Autowired(required = false)
+                private List<Customizer<Resilience4JCircuitBreakerFactory>> customizers = new ArrayList<>();
+
+                @Bean
+                @ConditionalOnMissingBean(CircuitBreakerFactory.class)
+                public Resilience4JCircuitBreakerFactory resilience4jCircuitBreakerFactory(
+                        CircuitBreakerRegistry circuitBreakerRegistry, TimeLimiterRegistry timeLimiterRegistry,
+                        @Autowired(required = false) Resilience4jBulkheadProvider bulkheadProvider,
+                        Resilience4JConfigurationProperties resilience4JConfigurationProperties) {
+                    Resilience4JCircuitBreakerFactory factory = new Resilience4JCircuitBreakerFactory(circuitBreakerRegistry,
+                            timeLimiterRegistry, bulkheadProvider, resilience4JConfigurationProperties);
+                    customizers.forEach(customizer -> customizer.customize(factory));
+                    return factory;
+                }
+                ...
+            }
+            ```
+        5. `Feign.Builder`
+            resilience4j没有提供`Feign.Builder`bean的注入。
+            实际生效的是：`org.springframework.cloud.openfeign.FeignClientsConfiguration.CircuitBreakerPresentFeignBuilderConfiguration.circuitBreakerFeignBuilder`
+            上面已经对此方法做了介绍，这里不再赘述。
+    3. `SentinelFeign.Builder`的唯一性注入（`@ConditionalOnMissingBean`）
+
+7. 部分疑问
+    1. 引入`spring-cloud-starter-alibaba-sentinel`后，`Feign.Builder`只会注入`spring-cloud-starter-alibaba-sentinel`中的bean，而不会使用`spring-cloud-starter-openfeign`中的bean。
+        - 自动配置：
+            查看二者的自动注入配置文件`\META-INF\spring\org.springframework.boot.autoconfigure.AutoConfiguration.imports`，可以看到只有`spring-cloud-starter-alibaba-sentinel`引入了`Feign.Builder`注入`Feign.Builder`的自动配置类，而`spring-cloud-starter-openfeign`的自动配置类并没有放到imports文件中。
+            所以，根据注入优先级顺序，`spring-cloud-starter-alibaba-sentinel`优先注入。
+        - 唯一性：
+            由于`Feign.Builder`的bean方法被`@ConditionalOnMissingBean`注解，所以，只有`spring-cloud-starter-alibaba-sentinel`会注入`Feign.Builder`bean。
+    2. 
 ---
 
 ### 其它

@@ -7,6 +7,15 @@ spring:
   application:
     name: service-order
   cloud:
+    circuitbreaker:
+      # for resilience4j
+      resilience4j:
+        enabled: true
+        blocking:
+          enabled: true
+      # for sentinel
+      sentinel:
+        enabled: true
     nacos:
       #      discovery:
       #        service: ${spring.application.name}
@@ -49,7 +58,9 @@ spring:
           #     - org.example.order.feign.client.ProductFeignClient5$MyRequestInterceptor
           #     - org.example.order.feign.client.ProductFeignClient5$MyRequestInterceptor
           #   response-interceptor: org.example.order.feign.client.ProductFeignClient5$MyResponseInterceptor
-
+      # 启用OpenFeign熔断
+      circuitbreaker:
+        enabled: true
   # 在nacos配置页面新建配置：配置管理-->配置列表-->创建配置
   # 在“新建配置”页面：
   # - 在“Data ID”中输入: service-order.yml
@@ -85,6 +96,9 @@ logging:
   level:
     org.example.order.feign.client: DEBUG
     org.example.order.feign.client.DirectFeignClient2: DEBUG
+feign:
+  sentinel:
+    enabled: true
 
 
 
