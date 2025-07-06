@@ -9,4 +9,7 @@
 编译：
 ``` shell
 mvn clean package -DskipTests
+-DdownloadSources=true 下载源代码jar
+-DdownloadJavadocs=true 下载javadoc包
+mvn dependency:sources -DdownloadSources=true -DdownloadJavadocs=true
 ```
